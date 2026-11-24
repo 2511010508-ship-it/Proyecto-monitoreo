@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi casa · sensores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#eef1f0; --surface:#ffffff; --ink:#1b2a2f; --muted:#5d6e73; --line:#d5dcda;
+  --energia:#0e7c86; --aire:#b8741f; --temp:#c2493d; --hum:#3e6fb0; --alerta:#c2493d;
+  --display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --body:'Instrument Sans','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#10181b; --surface:#182226; --ink:#e6eeee; --muted:#93a5a9; --line:#27353a;
+         --energia:#3cb5bf; --aire:#e0a04d; --temp:#ef7f72; --hum:#78a2dd; --alerta:#ef7f72; }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.5}
+main{max-width:1040px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+h1{font-family:var(--display);font-size:1.5rem;margin:0}
+h2{font-family:var(--display);font-size:1.15rem;margin:0 0 12px}
+.estado{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.9rem}
+.punto{width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.punto.ok{background:#2e9e5b}.punto.mal{background:var(--alerta)}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--energia);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+.aviso{border-color:var(--alerta);color:var(--alerta);font-weight:600}
+.grupos{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+.potencia{font-family:var(--display);font-size:3.6rem;font-weight:700;line-height:1;color:var(--energia)}
+.potencia small{font-size:1.2rem;font-weight:500;color:var(--muted);margin-left:6px}
+.fila{display:flex;flex-wrap:wrap;gap:22px;margin-top:14px}
+.dato span{display:block;color:var(--muted);font-size:.85rem}
+.dato b{font-family:var(--display);font-size:1.5rem}
+.sin{color:var(--muted);font-size:.85rem;margin-top:10px}
+.barra{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px}
+.barra .grow{flex:1}
+.totales{display:flex;flex-wrap:wrap;gap:24px;margin-bottom:10px}
+.lienzo{position:relative;height:240px}
+.graficos{display:grid;grid-template-columns:1fr;gap:16px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);max-width:420px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+label{display:block;margin:12px 0 4px;font-weight:600;font-size:.9rem}
+input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.acciones{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.primario{background:var(--energia);color:#fff;border-color:var(--energia)}
+.nota{font-size:.82rem;color:var(--muted)}
+@media (max-width:720px){.grupos{grid-template-columns:1fr}.potencia{font-size:3rem}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Mi casa</h1>
+    <div class="estado"><span class="punto" id="punto"></span><span id="estadoTxt">Sin configurar</span>
+      <button id="btnAjustes" type="button">Ajustes</button></div>
+  </header>
+
+  <div class="panel aviso" id="alertaGas" hidden>Gas alto en el último dato. Ventila el lugar y revisa el sensor.</div>
+
+  <section class="grupos">
+    <div class="panel">
+      <h2>Electricidad</h2>
+      <div class="potencia"><span id="vPotencia">--</span><small>W</small></div>
+      <div class="fila">
+        <div class="dato"><span>Voltaje</span><b id="vVoltaje">--</b> V</div>
+        <div class="dato"><span>Corriente</span><b id="vCorriente">--</b> A</div>
+        <div class="dato"><span>Energía acumulada</span><b id="vEnergia">--</b> kWh</div>
+      </div>
+      <div class="sin" id="sinElec"></div>
+    </div>
+    <div class="panel">
+      <h2>Aire y ambiente</h2>
+      <div class="fila" style="margin-top:0">
+        <div class="dato"><span>Temperatura</span><b id="vTemp" style="color:var(--temp)">--</b> °C</div>
+        <div class="dato"><span>Humedad</span><b id="vHum" style="color:var(--hum)">--</b> %</div>
+        <div class="dato"><span>Gas (MQ135)</span><b id="vGas" style="color:var(--aire)">--</b></div>
+      </div>
+      <div class="sin" id="sinAire"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Consumo de energía por día</h2>
+    <div class="barra">
+      <label for="selDias" style="margin:0">Periodo</label>
+      <select id="selDias"><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option></select>
+      <span class="grow"></span>
+      <span class="nota">El día de hoy se muestra parcial.</span>
+    </div>
+    <div class="totales">
+      <div class="dato"><span>Total del periodo</span><b id="totKwh">--</b> kWh</div>
+      <div class="dato"><span>Promedio diario</span><b id="promKwh">--</b> kWh</div>
+      <div class="dato"><span>Costo estimado</span><b id="totCosto">--</b></div>
+    </div>
+    <div class="lienzo"><canvas id="chConsumo" aria-label="Consumo diario en kWh"></canvas></div>
+  </section>
+
+  <section>
+    <div class="barra">
+      <h2 style="margin:0">Historial</h2><span class="grow"></span>
+      <label for="selRango" style="margin:0">Rango</label>
+      <select id="selRango">
+        <option value="1">Últimas 24 horas</option>
+        <option value="7">Últimos 7 días</option>
+        <option value="30">Últimos 30 días</option>
+      </select>
+    </div>
+    <div class="graficos">
+      <div class="panel"><h2>Potencia (W)</h2><div class="lienzo"><canvas id="chPotencia"></canvas></div></div>
+      <div class="panel"><h2>Gas</h2><div class="lienzo"><canvas id="chGas"></canvas></div></div>
+      <div class="panel"><h2>Temperatura y humedad</h2><div class="lienzo"><canvas id="chAmb"></canvas></div></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <h2>Ajustes</h2>
+  <p class="nota">Estos datos se guardan solo en este navegador. No están en el código de la página.</p>
+  <label for="inId">Channel ID</label><input id="inId" inputmode="numeric" autocomplete="off">
+  <label for="inKey">Read API Key</label><input id="inKey" autocomplete="off">
+  <label for="inTarifa">Tarifa por kWh (opcional, en soles)</label><input id="inTarifa" inputmode="decimal" placeholder="0.80">
+  <label for="inUmbral">Umbral de alerta de gas</label><input id="inUmbral" inputmode="numeric" placeholder="2000">
+  <div class="acciones"><button type="button" id="btnCerrar">Cancelar</button><button type="button" class="primario" id="btnGuardar">Guardar</button></div>
+</dialog>
+
+<script>
+const TZ = 'America/Lima';
+const API = 'https://api.thingspeak.com/channels/';
+const $ = id => document.getElementById(id);
+let cfg = { id:'', key:'', tarifa:'', umbral:'2000' };
+let charts = {};
+
+try { Object.assign(cfg, JSON.parse(localStorage.getItem('cfgCasa') || '{}')); } catch(e){}
+
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function fmt(n, d=1){ return (n===null||n===undefined||isNaN(n)) ? '--' : Number(n).toLocaleString('es-PE',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function url(path, params){
+  const q = new URLSearchParams({ timezone:TZ, ...params });
+  if (cfg.key) q.set('api_key', cfg.key);
+  return API + cfg.id + path + '?' + q.toString();
+}
+async function pedir(u){
+  const r = await fetch(u);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const t = await r.text();
+  if (t.trim() === '-1') throw new Error('Clave o canal incorrectos');
+  return JSON.parse(t);
+}
+function setEstado(ok, txt){
+  $('punto').className = 'punto ' + (ok ? 'ok' : 'mal');
+  $('estadoTxt').textContent = txt;
+}
+function hace(fecha){
+  const m = Math.round((Date.now() - new Date(fecha).getTime())/60000);
+  if (m < 1) return 'hace segundos';
+  if (m < 60) return 'hace ' + m + ' min';
+  if (m < 1440) return 'hace ' + Math.round(m/60) + ' h';
+  return 'hace ' + Math.round(m/1440) + ' d';
+}
+
+// ---- Valores actuales: último dato no nulo de cada campo ----
+function ultimo(feeds, campo){
+  for (let i = feeds.length - 1; i >= 0; i--){
+    const v = feeds[i][campo];
+    if (v !== null && v !== undefined && v !== '') return { valor: parseFloat(v), cuando: feeds[i].created_at };
+  }
+  return null;
+}
+async function cargarActual(){
+  const d = await pedir(url('/feeds.json', { results: 60 }));
+  const f = d.feeds || [];
+  const g = n => ultimo(f, 'field' + n);
+  const t = g(1), h = g(2), gas = g(3), p = g(4), c = g(5), v = g(6), e = g(7);
+
+  $('vTemp').textContent = fmt(t && t.valor);
+  $('vHum').textContent = fmt(h && h.valor, 0);
+  $('vGas').textContent = fmt(gas && gas.valor, 0);
+  $('vPotencia').textContent = fmt(p && p.valor, 0);
+  $('vCorriente').textContent = fmt(c && c.valor, 2);
+  $('vVoltaje').textContent = fmt(v && v.valor, 1);
+  $('vEnergia').textContent = fmt(e && e.valor, 2);
+
+  const aire = [t, h, gas].filter(Boolean).map(x => new Date(x.cuando).getTime());
+  const elec = [p, c, v, e].filter(Boolean).map(x => new Date(x.cuando).getTime());
+  const aireOk = aire.length && Date.now() - Math.max(...aire) < 5*60000;
+  const elecOk = elec.length && Date.now() - Math.max(...elec) < 5*60000;
+  $('sinAire').textContent = aire.length ? (aireOk ? 'Actualizado ' + hace(Math.max(...aire)) : 'Sin señal desde ' + hace(Math.max(...aire))) : 'Sin datos todavía';
+  $('sinElec').textContent = elec.length ? (elecOk ? 'Actualizado ' + hace(Math.max(...elec)) : 'Sin señal desde ' + hace(Math.max(...elec))) : 'Sin datos todavía';
+
+  const umbral = parseFloat(cfg.umbral) || 2000;
+  $('alertaGas').hidden = !(gas && aireOk && gas.valor >= umbral);
+  setEstado(aireOk || elecOk, aireOk || elecOk ? 'En línea' : 'Sin señal de los nodos');
+}
+
+// ---- Gráficos de línea ----
+function linea(id, series, etiquetas){
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart($(id), {
+    type: 'line',
+    data: { labels: etiquetas, datasets: series.map(s => ({
+      label: s.label, data: s.data, borderColor: s.color, backgroundColor: s.color,
+      borderWidth: 2, pointRadius: 0, tension: .25, spanGaps: true })) },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode:'index', intersect:false },
+      plugins: { legend: { display: series.length > 1, labels:{ color: css('--muted') } } },
+      scales: {
+        x: { ticks: { color: css('--muted'), maxTicksLimit: 7, maxRotation: 0 }, grid: { display:false } },
+        y: { ticks: { color: css('--muted') }, grid: { color: css('--line') } } } }
+  });
+}
+async function cargarHistorial(){
+  const dias = parseInt($('selRango').value);
+  const prom = dias === 1 ? 10 : (dias === 7 ? 60 : 240);
+  const d = await pedir(url('/feeds.json', { days: dias, average: prom }));
+  const f = d.feeds || [];
+  const et = f.map(x => {
+    const dt = new Date(x.created_at);
+    return dias === 1 ? dt.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})
+                      : dt.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'}) + ' ' + dt.toLocaleTimeString('es-PE',{hour:'2-digit'}) + 'h';
+  });
+  const col = n => f.map(x => x['field'+n] === null ? null : parseFloat(x['field'+n]));
+  linea('chPotencia', [{label:'Potencia (W)', data: col(4), color: css('--energia')}], et);
+  linea('chGas', [{label:'Gas', data: col(3), color: css('--aire')}], et);
+  linea('chAmb', [{label:'Temperatura (°C)', data: col(1), color: css('--temp')},
+                  {label:'Humedad (%)', data: col(2), color: css('--hum')}], et);
+}
+
+// ---- Consumo diario: diferencia entre el máximo de cada día y el del día anterior ----
+async function cargarConsumo(){
+  const n = parseInt($('selDias').value);
+  const d = await pedir(url('/fields/7.json', { days: n + 1, max: 'daily' }));
+  const f = (d.feeds || []).filter(x => x.field7 !== null);
+  const dias = [];
+  for (let i = 1; i < f.length; i++){
+    const hoy = parseFloat(f[i].field7), ayer = parseFloat(f[i-1].field7);
+    let kwh = hoy - ayer;
+    if (kwh < 0) kwh = hoy;           // el medidor se reinició: se toma el nuevo punto de partida
+    dias.push({ dia: f[i].created_at.slice(5,10).split('-').reverse().join('/'), kwh });
+  }
+  const total = dias.reduce((a,b) => a + b.kwh, 0);
+  $('totKwh').textContent = fmt(total, 2);
+  $('promKwh').textContent = dias.length ? fmt(total / dias.length, 2) : '--';
+  const tarifa = parseFloat(cfg.tarifa);
+  $('totCosto').textContent = tarifa ? 'S/ ' + fmt(total * tarifa, 2) : 'define la tarifa en Ajustes';
+
+  if (charts.chConsumo) charts.chConsumo.destroy();
+  charts.chConsumo = new Chart($('chConsumo'), {
+    type: 'bar',
+    data: { labels: dias.map(x => x.dia), datasets: [{ label: 'kWh', data: dias.map(x => +x.kwh.toFixed(3)),
+            backgroundColor: css('--energia'), borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display:false } },
+      scales: { x: { ticks: { color: css('--muted'), maxRotation: 0, autoSkip: true }, grid: { display:false } },
+                y: { beginAtZero: true, ticks: { color: css('--muted') }, grid: { color: css('--line') } } } }
+  });
+}
+
+// ---- Ajustes ----
+function abrirAjustes(){
+  $('inId').value = cfg.id; $('inKey').value = cfg.key; $('inTarifa').value = cfg.tarifa; $('inUmbral').value = cfg.umbral;
+  $('dlg').showModal();
+}
+$('btnAjustes').onclick = abrirAjustes;
+$('btnCerrar').onclick = () => $('dlg').close();
+$('btnGuardar').onclick = () => {
+  cfg = { id: $('inId').value.trim(), key: $('inKey').value.trim(), tarifa: $('inTarifa').value.trim(), umbral: $('inUmbral').value.trim() || '2000' };
+  try { localStorage.setItem('cfgCasa', JSON.stringify(cfg)); } catch(e){}
+  $('dlg').close();
+  todo();
+};
+$('selRango').onchange = () => cargarHistorial().catch(mostrarError);
+$('selDias').onchange = () => cargarConsumo().catch(mostrarError);
+
+function mostrarError(e){ setEstado(false, 'Error: ' + e.message); }
+function todo(){
+  if (!cfg.id) { setEstado(false, 'Sin configurar'); abrirAjustes(); return; }
+  cargarActual().catch(mostrarError);
+  cargarHistorial().catch(mostrarError);
+  cargarConsumo().catch(mostrarError);
+}
+todo();
+setInterval(() => { if (cfg.id) cargarActual().catch(mostrarError); }, 30000);
+</script>
+</body>
+</html>
